@@ -1,7 +1,7 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::Stylize,
+    style::{Color, Style, Stylize},
     symbols::border,
     text::{Line, Text},
     widgets::{Block, Paragraph, Widget},
@@ -22,7 +22,7 @@ pub struct Aligner<'a> {
     row_seq: Vec<u8>,
     col_seq: Vec<u8>,
     scorer: &'a dyn AlignScorer,
-    status: usize
+    status: (usize, usize),
 }
 
 pub trait AlignScorer {
@@ -68,25 +68,31 @@ impl Widget for &Aligner<'_> {
         let title = Line::from(" ruSW ".bold());
         let block = Block::bordered()
             .title(title.centered())
-            .title_bottom("-------")
+            //.title_bottom("-------")
             .border_set(border::THICK);
 
-        let counter_text = Text::from(vec![Line::from(vec![
-            "Value: ".into(),
-            self.status.to_string().yellow(),
-        ])]);
-
-        Paragraph::new(counter_text)
+        // let counter_text = Text::from(vec![Line::from(vec![
+        //     "Value: ".into(),
+        //     self.status.to_string().yellow(),
+        // ])]);
+        Paragraph::new("")
             .centered()
             .block(block)
             .render(area, buf);
+        let (r, c) = self.status;
+        let score = self.matrix[r][c].score;
+        for i in 0..r {
+            for j in 0..c {
+                buf.set_string(i as u16, j as u16, "*", Style::default().fg(Color::Cyan));
+            }
+        }
     }
 }
 
 impl Aligner<'_> {
     pub fn new<'a> (row_seq: &str, col_seq: &str, scorer: & 'a dyn AlignScorer) -> Aligner<'a> {
         let matrix = vec![vec![AlignCell { from: (0, 0), score: 0 }; col_seq.len() + 1]; row_seq.len() + 1];
-        Aligner { scorer: scorer, row_seq: row_seq.as_bytes().to_owned(), col_seq: col_seq.as_bytes().to_owned(), matrix: matrix, status: 0 }
+        Aligner { scorer: scorer, row_seq: row_seq.as_bytes().to_owned(), col_seq: col_seq.as_bytes().to_owned(), matrix: matrix, status: (0, 0) }
     }
 
     pub fn draw(&self, frame: &mut Frame) {
@@ -108,8 +114,7 @@ impl Aligner<'_> {
                         }
                     }
                 }
-                self.status = self.status + 1;
-                let _ = terminal.draw(|frame| self.draw(frame)); // Brutalm   ente rimosso ? Perchè uesta roba non ritorna un Result<>`
+                self.status = (r, c);
                 let diag_ancestor = self.matrix[r-1][c-1].score;
                 let gap_up: AlignCell = self.gap_up(r, c);
                 let gap_left: AlignCell = self.gap_left(r, c);
@@ -131,6 +136,7 @@ impl Aligner<'_> {
                 if self.matrix[r][c].score >= max_cell.score {
                     max_cell = AlignCell{score: this_cell.score, from: (r, c)}; // This is not a from but a here. But...who knows?
                 }
+                let _ = terminal.draw(|frame| self.draw(frame)); // Brutalm   ente rimosso ? Perchè uesta roba non ritorna un Result<>`
             }
         }
         Ok(max_cell)
