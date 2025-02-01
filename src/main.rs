@@ -8,8 +8,8 @@ use ratatui::{
     DefaultTerminal, Frame,
 };
 use color_eyre::Result;
-use crossterm::event::{self, Event};
-use std::{thread, time};
+use crossterm::event::{self, Event, KeyCode, KeyEvent};
+use std::{thread, time::{self, Duration}};
 
 #[derive(Debug, Clone)] // TODO signal bug to vscode about this gliph (?)
 pub struct AlignCell {
@@ -98,9 +98,16 @@ impl Aligner<'_> {
 
     pub fn generate_scores(&mut self, terminal: &mut DefaultTerminal) -> Result<AlignCell> {
         let mut max_cell = AlignCell {from: (0, 0), score: -1};
-        for r in 1..self.matrix.len() { 
+        for r in 1..self.matrix.len() {
             //println!("{:?}", self.row_seq[r-1] as char); // as Christmas
             for c in 1..self.matrix[r].len() {
+                if let Ok(true) = event::poll(Duration::ZERO) {
+                    if let Ok(Event::Key(KeyEvent { code, .. })) = event::read() {
+                        if code == KeyCode::Char('q') {
+                            return Ok(max_cell);
+                        }
+                    }
+                }
                 self.status = self.status + 1;
                 let _ = terminal.draw(|frame| self.draw(frame)); // Brutalm   ente rimosso ? Perchè uesta roba non ritorna un Result<>`
                 let diag_ancestor = self.matrix[r-1][c-1].score;
@@ -191,6 +198,6 @@ fn main() {
     let mut aligned_col = "".to_owned();
     align.traceback(&max, max.from, &mut aligned_row, &mut aligned_col); // the from of the returned max is a here.
     ratatui::restore();
-    println!("{:?}\n{:?}", aligned_row.chars().rev().collect::<String>(), aligned_col.chars().rev().collect::<String>()); // turbo fish is like  <==> <--00--> 
+    println!("{:?}\n{:?}", aligned_row.chars().rev().collect::<String>(), aligned_col.chars().rev().collect::<String>()); // turbo fish is like  <==> <--00-->
     // result
 }
