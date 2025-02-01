@@ -85,21 +85,11 @@ impl Widget for &Aligner<'_> {
 
 impl Aligner<'_> {
     pub fn new<'a> (row_seq: &str, col_seq: &str, scorer: & 'a dyn AlignScorer) -> Aligner<'a> {
-<<<<<<< HEAD
         let matrix = vec![vec![AlignCell { from: (0, 0), score: 0 }; col_seq.len() + 1]; row_seq.len() + 1];
-        Aligner { scorer: scorer, row_seq: row_seq.as_bytes().to_owned(), col_seq: col_seq.as_bytes().to_owned(), matrix: matrix }
-    }
-
-    pub fn generate_scores(&mut self) -> AlignCell {
-        let mut max_cell = AlignCell {from: (0, 0), score: -1};
-        for r in 1..self.matrix.len() {
-            println!("{:?}", self.row_seq[r-1] as char); // as Christmas
-=======
-        let matrix = vec![vec![AlignCell { from: (-1, -1), score: 0 }; col_seq.len() + 1]; row_seq.len() + 1];
         Aligner { scorer: scorer, row_seq: row_seq.as_bytes().to_owned(), col_seq: col_seq.as_bytes().to_owned(), matrix: matrix, status: 0 }
     }
 
-    pub fn draw(&self, frame: &mut Frame, row: usize, col: usize) {
+    pub fn draw(&self, frame: &mut Frame) {
         //frame.render_widget(String::from_utf8(self.row_seq).unwrap(), frame.area());
         //frame.render_widget(format!("{} x {}", row, col), frame.area());
         frame.render_widget(self, frame.area());
@@ -107,13 +97,12 @@ impl Aligner<'_> {
     }
 
     pub fn generate_scores(&mut self, terminal: &mut DefaultTerminal) -> Result<AlignCell> {
-        let mut max_cell = AlignCell {from: (-1, -1), score: -1};
+        let mut max_cell = AlignCell {from: (0, 0), score: -1};
         for r in 1..self.matrix.len() { 
             //println!("{:?}", self.row_seq[r-1] as char); // as Christmas
->>>>>>> 555bd6b (Playing around with ratatui)
             for c in 1..self.matrix[r].len() {
                 self.status = self.status + 1;
-                let _ = terminal.draw(|frame| self.draw(frame, r, c)); // Brutalm   ente rimosso ? Perchè uesta roba non ritorna un Result<>`
+                let _ = terminal.draw(|frame| self.draw(frame)); // Brutalm   ente rimosso ? Perchè uesta roba non ritorna un Result<>`
                 let diag_ancestor = self.matrix[r-1][c-1].score;
                 let gap_up: AlignCell = self.gap_up(r, c);
                 let gap_left: AlignCell = self.gap_left(r, c);
@@ -201,12 +190,7 @@ fn main() {
     let mut aligned_row = "".to_owned();
     let mut aligned_col = "".to_owned();
     align.traceback(&max, max.from, &mut aligned_row, &mut aligned_col); // the from of the returned max is a here.
-<<<<<<< HEAD
-    println!("{:?}\n{:?}", aligned_row.chars().rev().collect::<String>(), aligned_col.chars().rev().collect::<String>()); // turbo fish is like  <==> <--00-->
-}
-=======
     ratatui::restore();
     println!("{:?}\n{:?}", aligned_row.chars().rev().collect::<String>(), aligned_col.chars().rev().collect::<String>()); // turbo fish is like  <==> <--00--> 
     // result
 }
->>>>>>> 555bd6b (Playing around with ratatui)
