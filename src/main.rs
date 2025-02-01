@@ -1,3 +1,16 @@
+use ratatui::{
+    buffer::Buffer,
+    layout::Rect,
+    style::Stylize,
+    symbols::border,
+    text::{Line, Text},
+    widgets::{Block, Paragraph, Widget},
+    DefaultTerminal, Frame,
+};
+use color_eyre::Result;
+use crossterm::event::{self, Event};
+use std::{thread, time};
+
 #[derive(Debug, Clone)] // TODO signal bug to vscode about this gliph (?)
 pub struct AlignCell {
     from: (usize, usize),
@@ -8,7 +21,8 @@ pub struct Aligner<'a> {
     matrix: Vec<Vec<AlignCell>>,
     row_seq: Vec<u8>,
     col_seq: Vec<u8>,
-    scorer: &'a dyn AlignScorer
+    scorer: &'a dyn AlignScorer,
+    status: usize
 }
 
 pub trait AlignScorer {
@@ -49,8 +63,29 @@ impl AlignScorer for BaseScorer {
     }
 }
 
+impl Widget for &Aligner<'_> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let title = Line::from(" ruSW ".bold());
+        let block = Block::bordered()
+            .title(title.centered())
+            .title_bottom("-------")
+            .border_set(border::THICK);
+
+        let counter_text = Text::from(vec![Line::from(vec![
+            "Value: ".into(),
+            self.status.to_string().yellow(),
+        ])]);
+
+        Paragraph::new(counter_text)
+            .centered()
+            .block(block)
+            .render(area, buf);
+    }
+}
+
 impl Aligner<'_> {
     pub fn new<'a> (row_seq: &str, col_seq: &str, scorer: & 'a dyn AlignScorer) -> Aligner<'a> {
+<<<<<<< HEAD
         let matrix = vec![vec![AlignCell { from: (0, 0), score: 0 }; col_seq.len() + 1]; row_seq.len() + 1];
         Aligner { scorer: scorer, row_seq: row_seq.as_bytes().to_owned(), col_seq: col_seq.as_bytes().to_owned(), matrix: matrix }
     }
@@ -59,7 +94,26 @@ impl Aligner<'_> {
         let mut max_cell = AlignCell {from: (0, 0), score: -1};
         for r in 1..self.matrix.len() {
             println!("{:?}", self.row_seq[r-1] as char); // as Christmas
+=======
+        let matrix = vec![vec![AlignCell { from: (-1, -1), score: 0 }; col_seq.len() + 1]; row_seq.len() + 1];
+        Aligner { scorer: scorer, row_seq: row_seq.as_bytes().to_owned(), col_seq: col_seq.as_bytes().to_owned(), matrix: matrix, status: 0 }
+    }
+
+    pub fn draw(&self, frame: &mut Frame, row: usize, col: usize) {
+        //frame.render_widget(String::from_utf8(self.row_seq).unwrap(), frame.area());
+        //frame.render_widget(format!("{} x {}", row, col), frame.area());
+        frame.render_widget(self, frame.area());
+        thread::sleep(time::Duration::from_millis(100));
+    }
+
+    pub fn generate_scores(&mut self, terminal: &mut DefaultTerminal) -> Result<AlignCell> {
+        let mut max_cell = AlignCell {from: (-1, -1), score: -1};
+        for r in 1..self.matrix.len() { 
+            //println!("{:?}", self.row_seq[r-1] as char); // as Christmas
+>>>>>>> 555bd6b (Playing around with ratatui)
             for c in 1..self.matrix[r].len() {
+                self.status = self.status + 1;
+                let _ = terminal.draw(|frame| self.draw(frame, r, c)); // Brutalm   ente rimosso ? Perchè uesta roba non ritorna un Result<>`
                 let diag_ancestor = self.matrix[r-1][c-1].score;
                 let gap_up: AlignCell = self.gap_up(r, c);
                 let gap_left: AlignCell = self.gap_left(r, c);
@@ -83,7 +137,7 @@ impl Aligner<'_> {
                 }
             }
         }
-        max_cell
+        Ok(max_cell)
     }
 
     fn gap_up(&self, r: usize, c: usize) -> AlignCell {
@@ -139,11 +193,20 @@ impl Aligner<'_> {
 
 fn main() {
     let scorer = BaseScorer::new();
+    let mut terminal = ratatui::init();
     let mut align = Aligner::new("GATTACATAAAAATGGGGGC", "GATACATAAAAAAAATGGGGGC", &scorer);
-    let max = align.generate_scores();
+
+    let max = align.generate_scores(&mut terminal).unwrap();
     println!("{:?}", max);
     let mut aligned_row = "".to_owned();
     let mut aligned_col = "".to_owned();
     align.traceback(&max, max.from, &mut aligned_row, &mut aligned_col); // the from of the returned max is a here.
+<<<<<<< HEAD
     println!("{:?}\n{:?}", aligned_row.chars().rev().collect::<String>(), aligned_col.chars().rev().collect::<String>()); // turbo fish is like  <==> <--00-->
 }
+=======
+    ratatui::restore();
+    println!("{:?}\n{:?}", aligned_row.chars().rev().collect::<String>(), aligned_col.chars().rev().collect::<String>()); // turbo fish is like  <==> <--00--> 
+    // result
+}
+>>>>>>> 555bd6b (Playing around with ratatui)
