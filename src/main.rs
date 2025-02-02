@@ -228,7 +228,8 @@ impl Aligner<'_> {
 fn run(mut terminal: DefaultTerminal) -> Result<()> {
     let sil = Silly::new();
     for _i in 1 .. 100 {
-        let _ = terminal.draw(|frame| sil.draw(frame)); // Brutalm   ente rimosso ? Perchè uesta roba non ritorna un Result<>`
+        let _ = terminal.draw(move |frame| sil.draw(frame)); // Brutalm   ente rimosso ? Perchè uesta roba non ritorna un Result<>`
+        println!("{}", sil.count);
         if let Ok(true) = event::poll(Duration::ZERO) {
             if let Ok(Event::Key(KeyEvent { code, .. })) = event::read() {
                 if code == KeyCode::Char('q') {
@@ -240,13 +241,15 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
     return Ok(())
 }
 
+#[derive(Debug, Clone, Copy)] // TODO signal bug to vscode about this gliph (?)
 pub struct Silly {
     count: u8,
 }
 
 impl Widget for &Silly {
-    fn render(mut self, area: Rect, buf: &mut Buffer) {
-        //self.count = self.count + 1;
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        self.add();
+        println!("{}", self.count);
         buf.set_string(10 as u16, 10 as u16, format!("Puppa {}", self.count), Style::default().fg(Color::Rgb(127, 0, 0)));
     }
 }
@@ -257,7 +260,12 @@ impl Silly {
     }
 
     pub fn draw(self, frame: &mut Frame) {
+        println!("{}", self.count);
         frame.render_widget(&self, frame.area());
+    }
+
+    pub fn add(mut self) {
+        self.count = self.count + 1;
     }
 }
 
