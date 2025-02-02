@@ -86,7 +86,7 @@ impl Widget for &Aligner<'_> {
         let mut red = 0;
         for i in 2..r+2 {
             for j in 2..c+2 {
-                if (i == r && j == c) {
+                if i == r && j == c {
                     //  score : new 
                     red = ((255 - score as u8)) as u8;
                 }
@@ -226,29 +226,28 @@ impl Aligner<'_> {
 }
 
 fn run(mut terminal: DefaultTerminal) -> Result<()> {
-    loop {
-        terminal.draw(render)?;
-        if matches!(event::read()?, Event::Key(_)) {
-            break Ok(());
+    let sil = Silly::new();
+    for _i in 1 .. 100 {
+        let _ = terminal.draw(|frame| sil.draw(frame)); // Brutalm   ente rimosso ? Perchè uesta roba non ritorna un Result<>`
+        if let Ok(true) = event::poll(Duration::ZERO) {
+            if let Ok(Event::Key(KeyEvent { code, .. })) = event::read() {
+                if code == KeyCode::Char('q') {
+                    return Ok(());
+                }
+            }
         }
     }
-}
-
-fn render(frame: &mut Frame) {
-    frame.render_widget(Silly::new(), frame.area());
+    return Ok(())
 }
 
 pub struct Silly {
     count: u8,
 }
 
-impl Widget for Silly {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        for i in 0..1000 { 
-            buf.set_string(10 as u16, 10 as u16, format!("Puppa {}", i), Style::default().fg(Color::Rgb(127, 0, 0)));
-            //thread::sleep(time::Duration::from_millis(100));
-        }
-
+impl Widget for &Silly {
+    fn render(mut self, area: Rect, buf: &mut Buffer) {
+        //self.count = self.count + 1;
+        buf.set_string(10 as u16, 10 as u16, format!("Puppa {}", self.count), Style::default().fg(Color::Rgb(127, 0, 0)));
     }
 }
 
@@ -256,4 +255,10 @@ impl Silly {
     pub fn new() -> Silly {
         Silly{ count: 0}
     }
+
+    pub fn draw(self, frame: &mut Frame) {
+        frame.render_widget(&self, frame.area());
+    }
 }
+
+
