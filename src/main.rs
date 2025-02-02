@@ -1,3 +1,4 @@
+use palette::{convert::FromColorUnclamped, Okhsv, Srgb};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -10,6 +11,7 @@ use ratatui::{
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
 use std::{thread, time::{self, Duration}};
+use String;
 
 #[derive(Debug, Clone)] // TODO signal bug to vscode about this gliph (?)
 pub struct AlignCell {
@@ -75,15 +77,20 @@ impl Widget for &Aligner<'_> {
         //     "Value: ".into(),
         //     self.status.to_string().yellow(),
         // ])]);
-        Paragraph::new("")
-            .centered()
+        Paragraph::new(String::from_utf8(self.col_seq.clone()).unwrap().blue())
+            .left_aligned()
             .block(block)
             .render(area, buf);
         let (r, c) = self.status;
         let score = self.matrix[r][c].score;
-        for i in 0..r {
-            for j in 0..c {
-                buf.set_string(i as u16, j as u16, "*", Style::default().fg(Color::Cyan));
+        let mut red = 0;
+        for i in 2..r+2 {
+            for j in 2..c+2 {
+                if (i == r && j == c) {
+                    //  score : new 
+                    red = ((255 - score as u8)) as u8;
+                }
+                buf.set_string(j as u16, i as u16, "*", Style::default().fg(Color::Rgb(red, 0, 0)));
             }
         }
     }
@@ -97,8 +104,9 @@ impl Aligner<'_> {
 
     pub fn draw(&self, frame: &mut Frame) {
         //frame.render_widget(String::from_utf8(self.row_seq).unwrap(), frame.area());
-        //frame.render_widget(format!("{} x {}", row, col), frame.area());
-        frame.render_widget(self, frame.area());
+        // frame.area() is the size of the terminal, should check and die if we do not have space FIXME
+        frame.render_widget(self, Rect::new(0, 0, (self.col_seq.len()+3) as u16, (self.row_seq.len()+3) as u16)); // was frame.area()
+        // +3 cause we want space for the border and the strings
         thread::sleep(time::Duration::from_millis(100));
     }
 
@@ -169,8 +177,8 @@ impl Aligner<'_> {
 
     pub fn traceback(&self, max: &AlignCell, here: (usize, usize),  row_aligned: &mut String, col_aligned: &mut String) {
         if here.0 == max.from.0 + 1 && here.1 == max.from.1 + 1 { // diagonal
-            row_aligned.push(self.row_seq[(here.0-1)] as char);
-            col_aligned.push(self.col_seq[(here.1-1)] as char);
+            row_aligned.push(self.row_seq[here.0-1] as char);
+            col_aligned.push(self.col_seq[here.1-1] as char);
        } else if here.0 == max.from.0 { // gap on the column
             let delta = here.1 - max.from.1;
             for i in 0 .. delta {
@@ -193,7 +201,7 @@ impl Aligner<'_> {
 }
 
 
-fn main() {
+/* fn main() {
     let scorer = BaseScorer::new();
     let mut terminal = ratatui::init();
     let mut align = Aligner::new("GATTACATAAAAATGGGGGC", "GATACATAAAAAAAATGGGGGC", &scorer);
@@ -206,4 +214,46 @@ fn main() {
     ratatui::restore();
     println!("{:?}\n{:?}", aligned_row.chars().rev().collect::<String>(), aligned_col.chars().rev().collect::<String>()); // turbo fish is like  <==> <--00-->
     // result
+}
+ */
+
+ fn main() -> Result<()> {
+    color_eyre::install()?;
+    let terminal = ratatui::init();
+    let result = run(terminal);
+    ratatui::restore();
+    result
+}
+
+fn run(mut terminal: DefaultTerminal) -> Result<()> {
+    loop {
+        terminal.draw(render)?;
+        if matches!(event::read()?, Event::Key(_)) {
+            break Ok(());
+        }
+    }
+}
+
+fn render(frame: &mut Frame) {
+    frame.render_widget(Silly::new(), frame.area());
+}
+
+pub struct Silly {
+    count: u8,
+}
+
+impl Widget for Silly {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        for i in 0..1000 { 
+            buf.set_string(10 as u16, 10 as u16, format!("Puppa {}", i), Style::default().fg(Color::Rgb(127, 0, 0)));
+            //thread::sleep(time::Duration::from_millis(100));
+        }
+
+    }
+}
+
+impl Silly {
+    pub fn new() -> Silly {
+        Silly{ count: 0}
+    }
 }

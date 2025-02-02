@@ -8,4 +8,7 @@ edition = "2021"
 [dependencies]
 color-eyre = "0.6.3"
 crossterm = "0.28.1"
+material = { version = "0.1.1", features = ["ratatui"] }
+material-colors = "0.4.2"
+palette = "0.7.6"
 ratatui = "0.29.0"
