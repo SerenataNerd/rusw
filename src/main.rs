@@ -5,7 +5,7 @@ use ratatui::{
     style::{Color, Style, Stylize},
     symbols::border,
     text::{Line, Text},
-    widgets::{Block, Paragraph, Widget},
+    widgets::{Block, Paragraph, StatefulWidget, Widget},
     DefaultTerminal, Frame,
 };
 use color_eyre::Result;
@@ -19,11 +19,13 @@ pub struct AlignCell {
     score: i32,
 }
 
-pub struct Aligner<'a> {
+pub struct Aligner {
     matrix: Vec<Vec<AlignCell>>,
     row_seq: Vec<u8>,
     col_seq: Vec<u8>,
-    scorer: &'a dyn AlignScorer,
+    row_reached: usize,
+    col_reached: usize,
+    scorer: Box<dyn AlignScorer>,
     status: (usize, usize),
 }
 
@@ -65,8 +67,27 @@ impl AlignScorer for BaseScorer {
     }
 }
 
-impl Widget for &Aligner<'_> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+impl Silly {
+    pub fn new() -> Silly {
+        Silly{}
+    }
+
+    pub fn draw(self, frame: &mut Frame, state: &mut Aligner) {
+        //frame.render_widget(String::from_utf8(self.row_seq).unwrap(), frame.area());
+        // frame.area() is the size of the terminal, should check and die if we do not have space FIXME
+        frame.render_stateful_widget(self, Rect::new(0, 0, (state.col_seq.len()+3) as u16, (state.row_seq.len()+3) as u16), state); // was frame.area()
+        // +3 cause we want space for the border and the strings
+        thread::sleep(time::Duration::from_millis(100));
+    }
+
+}
+
+
+impl StatefulWidget for Silly {
+    //type State<'_> = Aligner<'a>; // fuggite sciocchi!
+    type State = Aligner; // fuggite sciocchi!
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let title = Line::from(" ruSW ".bold());
         let block = Block::bordered()
             .title(title.centered())
@@ -77,40 +98,75 @@ impl Widget for &Aligner<'_> {
         //     "Value: ".into(),
         //     self.status.to_string().yellow(),
         // ])]);
-        Paragraph::new(String::from_utf8(self.col_seq.clone()).unwrap().blue())
+        Paragraph::new(String::from_utf8(state.col_seq.clone()).unwrap().blue())
             .left_aligned()
             .block(block)
             .render(area, buf);
-        let (r, c) = self.status;
-        let score = self.matrix[r][c].score;
+        let (r, c) = state.status;
+        let score = state.matrix[r][c].score;
         let mut red = 0;
-        for i in 2..r+2 {
-            for j in 2..c+2 {
-                if i == r && j == c {
+        for i in 2..state.matrix.len()+2 {
+            for j in 2..state.matrix.len()+2 {
+                if i == r+2 && j == c+2 {
                     //  score : new 
                     red = ((255 - score as u8)) as u8;
                 }
-                buf.set_string(j as u16, i as u16, "*", Style::default().fg(Color::Rgb(red, 0, 0)));
+                buf.set_string(j as u16, i as u16, state.matrix[i-2][j-2].score.to_string(), Style::default().fg(Color::Rgb(red, 0, 0)));
+                red = 0;
             }
         }
     }
 }
 
-impl Aligner<'_> {
-    pub fn new<'a> (row_seq: &str, col_seq: &str, scorer: & 'a dyn AlignScorer) -> Aligner<'a> {
+// va rifatto tutto perchè serve lo spingitore di cavalieri esterno perchè non è lo stato che decide quando avanza il mondo.
+impl Aligner {
+    pub fn new<'a> (row_seq: &str, col_seq: &str, scorer:  Box<dyn AlignScorer>) -> Aligner {
         let matrix = vec![vec![AlignCell { from: (0, 0), score: 0 }; col_seq.len() + 1]; row_seq.len() + 1];
-        Aligner { scorer: scorer, row_seq: row_seq.as_bytes().to_owned(), col_seq: col_seq.as_bytes().to_owned(), matrix: matrix, status: (0, 0) }
+        Aligner { scorer: scorer, row_seq: row_seq.as_bytes().to_owned(), col_seq: col_seq.as_bytes().to_owned(), row_reached: 1, col_reached: 1, matrix: matrix, status: (0, 0) }
     }
 
-    pub fn draw(&self, frame: &mut Frame) {
-        //frame.render_widget(String::from_utf8(self.row_seq).unwrap(), frame.area());
-        // frame.area() is the size of the terminal, should check and die if we do not have space FIXME
-        frame.render_widget(self, Rect::new(0, 0, (self.col_seq.len()+3) as u16, (self.row_seq.len()+3) as u16)); // was frame.area()
-        // +3 cause we want space for the border and the strings
-        thread::sleep(time::Duration::from_millis(100));
+    pub fn generate_next_score(&mut self) {
+        if let Ok(true) = event::poll(Duration::ZERO) {
+            if let Ok(Event::Key(KeyEvent { code, .. })) = event::read() {
+                if code == KeyCode::Char('q') {
+                    return
+                }
+            }
+        }
+        let r: usize = self.row_reached;
+        let c: usize = self.col_reached;
+        self.status = (r, c);
+        let diag_ancestor = self.matrix[r-1][c-1].score;
+        let gap_up: AlignCell = self.gap_up(r, c);
+        let gap_left: AlignCell = self.gap_left(r, c);
+        let mut this_cell: AlignCell;
+        if diag_ancestor >= gap_up.score && diag_ancestor >= gap_left.score {
+            this_cell = AlignCell { from: ((r-1), (c-1)),
+                score: diag_ancestor + self.scorer.get_score(self.row_seq[r-1], self.col_seq[c-1]) };
+                // We do not comment our choices regarding rows/cols and r/c because it will
+                // be _the most_ confounding thing here.
+        } else if gap_up.score >= gap_left.score {
+            this_cell = gap_up;
+        } else {
+            this_cell = gap_left;
+        }
+        if this_cell.score < 0 {
+            this_cell = AlignCell{score: 0, ..this_cell}
+        }
+        self.matrix[r][c] = this_cell.clone();
+        if r < self.matrix.len()-1 {
+            self.row_reached += 1;
+        } else if c < self.matrix.len()-1 {
+            self.col_reached += 1;
+            self.row_reached = 1
+        }
+        // increment
+        //if self.matrix[r][c].score >= max_cell.score { // max_cell needs to be stored in the aligner
+        //   max_cell = AlignCell{score: this_cell.score, from: (r, c)}; // This is not a from but a here. But...who knows?
+        //}
     }
 
-    pub fn generate_scores(&mut self, terminal: &mut DefaultTerminal) -> Result<AlignCell> {
+    pub fn generate_scores(&mut self) -> Result<AlignCell> {
         let mut max_cell = AlignCell {from: (0, 0), score: -1};
         for r in 1..self.matrix.len() {
             //println!("{:?}", self.row_seq[r-1] as char); // as Christmas
@@ -144,8 +200,10 @@ impl Aligner<'_> {
                 if self.matrix[r][c].score >= max_cell.score {
                     max_cell = AlignCell{score: this_cell.score, from: (r, c)}; // This is not a from but a here. But...who knows?
                 }
-                let _ = terminal.draw(|frame| self.draw(frame)); // Brutalm   ente rimosso ? Perchè uesta roba non ritorna un Result<>`
+                //let _ = terminal.draw(|frame| self.draw(frame)); // Brutalm   ente rimosso ? Perchè uesta roba non ritorna un Result<>`
+                self.col_reached += 1;
             }
+            self.row_reached += 1;
         }
         Ok(max_cell)
     }
@@ -201,35 +259,39 @@ impl Aligner<'_> {
 }
 
 
-/* fn main() {
-    let scorer = BaseScorer::new();
+fn main() -> Result<()> {
     let mut terminal = ratatui::init();
-    let mut align = Aligner::new("GATTACATAAAAATGGGGGC", "GATACATAAAAAAAATGGGGGC", &scorer);
-
-    let max = align.generate_scores(&mut terminal).unwrap();
-    println!("{:?}", max);
-    let mut aligned_row = "".to_owned();
-    let mut aligned_col = "".to_owned();
-    align.traceback(&max, max.from, &mut aligned_row, &mut aligned_col); // the from of the returned max is a here.
-    ratatui::restore();
-    println!("{:?}\n{:?}", aligned_row.chars().rev().collect::<String>(), aligned_col.chars().rev().collect::<String>()); // turbo fish is like  <==> <--00-->
-    // result
-}
- */
-
- fn main() -> Result<()> {
-    color_eyre::install()?;
-    let terminal = ratatui::init();
     let result = run(terminal);
+
+    //let max = align.generate_scores().unwrap(); //
+    //println!("{:?}", max);
+    //let mut aligned_row = "".to_owned();
+    //let mut aligned_col = "".to_owned();
+    //align.traceback(&max, max.from, &mut aligned_row, &mut aligned_col); // the from of the returned max is a here.
+    //println!("{:?}\n{:?}", aligned_row.chars().rev().collect::<String>(), aligned_col.chars().rev().collect::<String>()); // turbo fish is like  <==> <--00-->
     ratatui::restore();
     result
 }
 
+
+//  fn main() -> Result<()> {
+//     color_eyre::install()?;
+//     let terminal = ratatui::init();
+//     let result = run(terminal);
+//     ratatui::restore();
+//     result
+// }
+
 fn run(mut terminal: DefaultTerminal) -> Result<()> {
-    let sil = Silly::new();
-    for _i in 1 .. 100 {
-        let _ = terminal.draw(move |frame| sil.draw(frame)); // Brutalm   ente rimosso ? Perchè uesta roba non ritorna un Result<>`
-        println!("{}", sil.count);
+    let sil: Silly = Silly::new();
+    let scorer = BaseScorer::new();
+    let s1 = "GATTACATAAAAATGGGGGC";
+    let mut align = Aligner::new(s1, "GATACATAAAAAAAATGGGGGC", Box::new(scorer));
+    for _i in 1 .. s1.len()*s1.len() {
+        align.generate_next_score();
+        let _ = terminal.draw(|frame| sil.draw(frame, &mut align)); // Brutalmente rimosso ? Perchè uesta roba non ritorna un Result<>`
+        thread::sleep(time::Duration::from_millis(100));
+        
         if let Ok(true) = event::poll(Duration::ZERO) {
             if let Ok(Event::Key(KeyEvent { code, .. })) = event::read() {
                 if code == KeyCode::Char('q') {
@@ -243,28 +305,43 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
 
 #[derive(Debug, Clone, Copy)] // TODO signal bug to vscode about this gliph (?)
 pub struct Silly {
+
+}
+pub struct SillyState {
     count: u8,
 }
 
-impl Widget for &Silly {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        self.add();
-        println!("{}", self.count);
-        buf.set_string(10 as u16, 10 as u16, format!("Puppa {}", self.count), Style::default().fg(Color::Rgb(127, 0, 0)));
-    }
-}
 
-impl Silly {
-    pub fn new() -> Silly {
-        Silly{ count: 0}
+// impl StatefulWidget for Silly {
+//     type State = SillyState; 
+    
+//     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+//         state.add();
+//         //println!("{}", self.count);
+//         buf.set_string(10 as u16, 10 as u16, format!("Puppa {}", state.count), Style::default().fg(Color::Rgb(127, 0, 0)));
+//         thread::sleep(time::Duration::from_millis(100));
+//     }
+// }
+
+// impl Silly {
+//     pub fn new() -> Silly {
+//         Silly{}
+//     }
+
+//     pub fn draw(self, frame: &mut Frame, state: &mut SillyState ) {
+//         //println!("{}", self.count);
+//         frame.render_stateful_widget(self, frame.area(), state);
+//         //   (&self, frame.area());
+//     }
+// }
+
+
+impl SillyState {
+    pub fn new() -> SillyState {
+        SillyState{ count: 0}
     }
 
-    pub fn draw(self, frame: &mut Frame) {
-        println!("{}", self.count);
-        frame.render_widget(&self, frame.area());
-    }
-
-    pub fn add(mut self) {
+    pub fn add(&mut self) {
         self.count = self.count + 1;
     }
 }
