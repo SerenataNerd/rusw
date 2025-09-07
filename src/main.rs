@@ -75,43 +75,36 @@ impl Silly {
     pub fn draw(self, frame: &mut Frame, state: &mut Aligner) {
         //frame.render_widget(String::from_utf8(self.row_seq).unwrap(), frame.area());
         // frame.area() is the size of the terminal, should check and die if we do not have space FIXME
-        frame.render_stateful_widget(self, Rect::new(0, 0, (state.col_seq.len()+3) as u16, (state.row_seq.len()+3) as u16), state); // was frame.area()
+        frame.render_stateful_widget(self, Rect::new(0, 0, (state.col_seq.len()+4) as u16, (state.row_seq.len()+4) as u16), state); // was frame.area()
         // +3 cause we want space for the border and the strings
-        thread::sleep(time::Duration::from_millis(100));
     }
-
 }
 
-
 impl StatefulWidget for Silly {
-    //type State<'_> = Aligner<'a>; // fuggite sciocchi!
-    type State = Aligner; // fuggite sciocchi!
+    type State = Aligner;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let title = Line::from(" ruSW ".bold());
         let block = Block::bordered()
             .title(title.centered())
-            //.title_bottom("-------")
             .border_set(border::THICK);
 
-        // let counter_text = Text::from(vec![Line::from(vec![
-        //     "Value: ".into(),
-        //     self.status.to_string().yellow(),
-        // ])]);
-        Paragraph::new(String::from_utf8(state.col_seq.clone()).unwrap().blue())
-            .left_aligned()
-            .block(block)
-            .render(area, buf);
+        block.render(area, buf);
         let (r, c) = state.status;
         let score = state.matrix[r][c].score;
         let mut red = 0;
-        for i in 2..state.matrix.len()+2 {
+        for j in 2..state.matrix.len()-1 {
+            buf.set_string(j as u16, 1 as u16, (state.col_seq[j-2] as char).to_string(), Style::default().fg(Color::Rgb(0, 0, 255)));
+        } 
+        for i in 2..(state.matrix[0].len()-1) {
+            buf.set_string(1 as u16, i as u16, (state.row_seq[i-2] as char).to_string(), Style::default().fg(Color::Rgb(0, 0, 255)));
+        }
+        for i in 2..state.matrix[0].len()+2 {
             for j in 2..state.matrix.len()+2 {
-                if i == r+2 && j == c+2 {
-                    //  score : new 
+                if j == r+2 && i == c+2 {
                     red = ((255 - score as u8)) as u8;
                 }
-                buf.set_string(j as u16, i as u16, state.matrix[i-2][j-2].score.to_string(), Style::default().fg(Color::Rgb(red, 0, 0)));
+                buf.set_string(i as u16, j as u16, state.matrix[j-2][i-2].score.to_string(), Style::default().fg(Color::Rgb(red, 0, 0)));
                 red = 0;
             }
         }
@@ -273,21 +266,13 @@ fn main() -> Result<()> {
     result
 }
 
-
-//  fn main() -> Result<()> {
-//     color_eyre::install()?;
-//     let terminal = ratatui::init();
-//     let result = run(terminal);
-//     ratatui::restore();
-//     result
-// }
-
 fn run(mut terminal: DefaultTerminal) -> Result<()> {
     let sil: Silly = Silly::new();
     let scorer = BaseScorer::new();
-    let s1 = "GATTACATAAAAATGGGGGC";
-    let mut align = Aligner::new(s1, "GATACATAAAAAAAATGGGGGC", Box::new(scorer));
-    for _i in 1 .. s1.len()*s1.len() {
+    let s1_row = "GATTACATAAAAATGGGGGCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    let s2_col = "GATACATAAAAAAAATGGGGGC";
+    let mut align = Aligner::new(s1_row, s2_col, Box::new(scorer));
+    for _i in 1 .. s1_row.len()*s2_col.len() {
         align.generate_next_score();
         let _ = terminal.draw(|frame| sil.draw(frame, &mut align)); // Brutalmente rimosso ? Perchè uesta roba non ritorna un Result<>`
         thread::sleep(time::Duration::from_millis(100));
@@ -307,43 +292,3 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
 pub struct Silly {
 
 }
-pub struct SillyState {
-    count: u8,
-}
-
-
-// impl StatefulWidget for Silly {
-//     type State = SillyState; 
-    
-//     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-//         state.add();
-//         //println!("{}", self.count);
-//         buf.set_string(10 as u16, 10 as u16, format!("Puppa {}", state.count), Style::default().fg(Color::Rgb(127, 0, 0)));
-//         thread::sleep(time::Duration::from_millis(100));
-//     }
-// }
-
-// impl Silly {
-//     pub fn new() -> Silly {
-//         Silly{}
-//     }
-
-//     pub fn draw(self, frame: &mut Frame, state: &mut SillyState ) {
-//         //println!("{}", self.count);
-//         frame.render_stateful_widget(self, frame.area(), state);
-//         //   (&self, frame.area());
-//     }
-// }
-
-
-impl SillyState {
-    pub fn new() -> SillyState {
-        SillyState{ count: 0}
-    }
-
-    pub fn add(&mut self) {
-        self.count = self.count + 1;
-    }
-}
-
-
